@@ -1,0 +1,99 @@
+// You will need all the code below as well as the automatic imports that FlutterFlow provides:
+/* // Automatic FlutterFlow imports
+import '/backend/backend.dart';
+import '/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
+import '/custom_code/actions/index.dart'; // Imports other custom actions
+import '/flutter_flow/custom_functions.dart'; // Imports custom functions
+import 'package:flutter/material.dart';
+// Begin custom action code
+// DO NOT REMOVE OR MODIFY THE CODE ABOVE!
+*/
+
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:mime/mime.dart';
+
+Future customUploader(
+    DocumentReference projectRef, DocumentReference userRef) async {
+  // Allows the user to pick multiple files, change to false to only allow one file
+  FilePickerResult? result =
+      await FilePicker.platform.pickFiles(allowMultiple: true);
+
+  // Retrieves the project ID
+  String projectID = projectRef.id;
+
+  // Retrieves user information
+  DocumentSnapshot userSnapshot = await userRef.get();
+  Map<String, dynamic> userData = userSnapshot.data() as Map<String, dynamic>;
+
+  // Checks if any files were selected
+  if (result != null) {
+    // Allows uploads to happen in parallel
+    List<Future<void>> uploadFutures = [];
+
+    // Loops through the selected files
+    for (var file in result.files) {
+      uploadFutures.add(
+        // Adding all the uploads to the list of futures
+        () async {
+          try {
+            // Specifies the storage location for the file
+            final ref = FirebaseStorage.instance.ref().child(
+                'workOrderUploads/${projectID}/${file.name}'); // Change to whatever folder/path you like
+
+            // Determines the MIME type of the file
+            // i.e. the file name and extension and the type.
+            final mimeType = lookupMimeType(file.name);
+
+            // Initiates the upload process
+            UploadTask uploadTask = ref.putData(
+              file.bytes!,
+              SettableMetadata(contentType: mimeType),
+            );
+
+            // Waits for the upload task to complete
+            TaskSnapshot taskSnapshot = await uploadTask;
+
+            // Retrieves metadata and download URL
+            FullMetadata metadata = await taskSnapshot.ref.getMetadata();
+            String downloadUrl = await taskSnapshot.ref.getDownloadURL();
+            // Converts file size to human-readable form
+            String humanReadableSize = formatBytes(metadata.size ?? 0, 2);
+
+            // Creates a record of the uploaded file with various metadata.
+            var uploadRecord = {
+              'downloadURL': downloadUrl,
+              'workOrderReference': projectRef.path,
+              'firebasePathReference': metadata.fullPath,
+              'fileName': metadata.name,
+              'fileType': mimeType,
+              'fileSize': metadata.size,
+              'fileSizeHumanReadable': humanReadableSize,
+              'timeCreated': metadata.timeCreated,
+              'lastUpdated': metadata.updated,
+              'owner': userRef,
+              'ownerDisplayName': userData['display_name'],
+              'ownerPhotoUrl': userData['photo_url'],
+            };
+
+            // Adds the upload record to a Firestore subcollection
+            await projectRef.collection('uploadedFiles').add(uploadRecord);
+            print('Record added for file: ${metadata.name}');
+          } catch (e) {
+            // Prints an error message if the upload fails
+            print(
+                'Failed to upload and save metadata for file ${file.name}: $e');
+          }
+        }(),
+      );
+    }
+
+    // Waits for all file uploads to complete in parallel
+    await Future.wait(uploadFutures);
+  } else {
+    return; // Exits the function if no files were selected
+  }
+}
