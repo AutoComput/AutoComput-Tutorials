@@ -1,3 +1,4 @@
+// This is a custom "Function" in Flutterflow; directly aids the customUploader custom "Action"
 // Helper function for the customUploader used in FlutterFlow
 import 'dart:convert';
 import 'dart:math' as math;
