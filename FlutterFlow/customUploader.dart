@@ -1,3 +1,4 @@
+// This is a custom "Action" in FlutterFlow to create a custom file uploader while using Firebase.
 // You will need all the code below as well as the automatic imports that FlutterFlow provides:
 /* // Automatic FlutterFlow imports
 import '/backend/backend.dart';
